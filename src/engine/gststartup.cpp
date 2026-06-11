@@ -27,6 +27,7 @@
 
 #include <QCoreApplication>
 #include <QString>
+#include <QStringList>
 #include <QDir>
 #include <QFile>
 
@@ -43,6 +44,76 @@
 using namespace Qt::Literals::StringLiterals;
 
 namespace GstStartup {
+
+namespace {
+
+void PrependEnvPath(const char *key, const QString &path) {
+
+  if (path.isEmpty()) return;
+
+  const QString existing = Utilities::GetEnv(QString::fromLatin1(key));
+  if (!existing.isEmpty() && existing.split(QLatin1Char(':')).contains(path)) return;
+
+  if (existing.isEmpty()) {
+    Utilities::SetEnv(key, path);
+  }
+  else {
+    Utilities::SetEnv(key, path + u':' + existing);
+  }
+
+}
+
+#if defined(Q_OS_MACOS) && !defined(USE_BUNDLE)
+
+QString FindPythonSitePackages(const QString &prefix) {
+
+  QDir lib_dir(prefix + u"/lib"_s);
+  lib_dir.setNameFilters({u"python3.*"_s});
+  lib_dir.setFilter(QDir::Dirs | QDir::NoDotAndDotDot);
+  lib_dir.setSorting(QDir::Name | QDir::Reversed);
+  const QStringList python_dirs = lib_dir.entryList();
+  for (const QString &python_dir : python_dirs) {
+    const QString site_packages = prefix + u"/lib/"_s + python_dir + u"/site-packages"_s;
+    if (QDir(site_packages + u"/gi"_s).exists()) return site_packages;
+  }
+
+  return QString();
+
+}
+
+void SetMacOSHomebrewGStreamerEnvironment() {
+
+  if (!qEnvironmentVariableIsEmpty("GST_PLUGIN_PATH")) return;
+
+  const QStringList prefixes = {u"/opt/homebrew"_s, u"/usr/local"_s};
+  for (const QString &prefix : prefixes) {
+    const QString scanner = prefix + u"/libexec/gstreamer-1.0/gst-plugin-scanner"_s;
+    const QString plugin_path = prefix + u"/lib/gstreamer-1.0"_s;
+    if (!QFile::exists(scanner) || !QDir(plugin_path).exists()) continue;
+
+    qLog(Debug) << "Configuring GStreamer environment for" << prefix;
+
+    if (qEnvironmentVariableIsEmpty("GST_PLUGIN_SCANNER")) {
+      Utilities::SetEnv("GST_PLUGIN_SCANNER", scanner);
+    }
+    Utilities::SetEnv("GST_PLUGIN_PATH", plugin_path);
+
+    PrependEnvPath("DYLD_LIBRARY_PATH", prefix + u"/lib"_s);
+    PrependEnvPath("GI_TYPELIB_PATH", prefix + u"/lib/girepository-1.0"_s);
+
+    const QString python_site_packages = FindPythonSitePackages(prefix);
+    if (!python_site_packages.isEmpty()) {
+      PrependEnvPath("PYTHONPATH", python_site_packages);
+    }
+
+    return;
+  }
+
+}
+
+#endif  // Q_OS_MACOS && !USE_BUNDLE
+
+}  // namespace
 
 void Initialize() {
 
@@ -78,6 +149,10 @@ void Initialize() {
 }
 
 void SetEnvironment() {
+
+#if defined(Q_OS_MACOS) && !defined(USE_BUNDLE)
+  SetMacOSHomebrewGStreamerEnvironment();
+#endif
 
 #ifdef USE_BUNDLE
 

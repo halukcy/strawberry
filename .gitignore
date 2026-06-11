@@ -1,4 +1,4 @@
-/build
+/build*
 /bin
 /CMakeLists.txt.user
 /.qtcreator
