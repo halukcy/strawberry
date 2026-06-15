@@ -163,29 +163,27 @@ export LIBSOUP_LIBRARY_PATH="$(brew --prefix)/lib/libsoup-3.0.dylib"
 cmake --build build-bundle --target deploy
 ```
 
-This runs `dist/macos/macgstcopy.sh` (copies GStreamer plugins and GIO modules into the bundle) followed by `macdeployqt`.
+This runs `dist/macos/macgstcopy.sh` (copies GStreamer plugins and GIO modules into the bundle), `macdeployqt`, then `dist/macos/macresign.sh`.
 
-`macdeployqt` may report codesign verification errors on some copied libraries. Re-sign the bundle:
+`macgstcopy.sh` uses `install_name_tool` on `libsoup` and GStreamer plugins, which invalidates signatures that `macdeployqt` applies. The resign script fixes this automatically. You may still see a codesign verification **error** from `macdeployqt` in the log output — that is expected; the final resign step corrects it.
+
+To re-sign manually without running deploy again:
 
 ```bash
-APP=build-bundle/strawberry.app
-
-find "$APP/Contents/Frameworks" -type f \( -name '*.dylib' -o -perm +111 \) -print0 \
-  | while IFS= read -r -d '' f; do codesign --force --sign - "$f"; done
-find "$APP/Contents/PlugIns" -type f \( -name '*.dylib' -o -perm +111 \) -print0 \
-  | while IFS= read -r -d '' f; do codesign --force --sign - "$f"; done
-find "$APP/Contents/Frameworks" -name '*.framework' -print0 \
-  | while IFS= read -r -d '' fw; do codesign --force --sign - "$fw"; done
-codesign --force --sign - "$APP/Contents/MacOS/strawberry"
-codesign --force --deep --sign - "$APP"
+dist/macos/macresign.sh build-bundle/strawberry.app
 ```
 
 ### Install to Applications
 
+Remove any existing install first. Signed bundles mark libraries read-only, so `cp -R` cannot overwrite files in place.
+
 ```bash
+rm -rf /Applications/strawberry.app
 cp -R build-bundle/strawberry.app /Applications/
 open /Applications/strawberry.app
 ```
+
+Alternatively, drag the old `strawberry.app` to Trash in Finder, then drag the new one into `/Applications`.
 
 ### Optional: create a DMG
 
@@ -216,6 +214,7 @@ export LIBSOUP_LIBRARY_PATH="$(brew --prefix)/lib/libsoup-3.0.dylib"
 cmake --build build-bundle --target deploy
 
 # re-sign (see commands above), then:
+rm -rf /Applications/strawberry.app
 cp -R build-bundle/strawberry.app /Applications/
 ```
 

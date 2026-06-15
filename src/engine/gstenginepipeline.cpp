@@ -761,54 +761,52 @@ bool GstEnginePipeline::InitAudioBin(QString &error) {
     g_object_set(G_OBJECT(audiopanorama_), "panorama", stereo_balance_, nullptr);
   }
 
-  // Create the equalizer elements if it's enabled.
-  if (eq_enabled_) {
-    equalizer_preamp_ = CreateElement(u"volume"_s, u"equalizer_preamp"_s, audiobin_, error);
-    if (!equalizer_preamp_) {
-      return false;
-    }
-    equalizer_ = CreateElement(u"equalizer-nbands"_s, u"equalizer_nbands"_s, audiobin_, error);
-    if (!equalizer_) {
-      return false;
-    }
-    // Setting the equalizer bands:
-    //
-    // GStreamer's GstIirEqualizerNBands sets up shelve filters for the first and last bands as corner cases.
-    // That was causing the "inverted slider" bug.
-    // As a workaround, we create two dummy bands at both ends of the spectrum.
-    // This causes the actual first and last adjustable bands to be implemented using band-pass filters.
-
-    g_object_set(G_OBJECT(equalizer_), "num-bands", kEqBandCount + 2, nullptr);
-
-    // Dummy first band (bandwidth 0, cutting below 20Hz):
-    GstObject *first_band = GST_OBJECT(gst_child_proxy_get_child_by_index(GST_CHILD_PROXY(equalizer_), 0));
-    if (first_band) {
-      g_object_set(G_OBJECT(first_band), "freq", 20.0, "bandwidth", 0, "gain", 0.0F, nullptr);
-      g_object_unref(G_OBJECT(first_band));
-    }
-
-    // Dummy last band (bandwidth 0, cutting over 20KHz):
-    GstObject *last_band = GST_OBJECT(gst_child_proxy_get_child_by_index(GST_CHILD_PROXY(equalizer_), kEqBandCount + 1));
-    if (last_band) {
-      g_object_set(G_OBJECT(last_band), "freq", 20000.0, "bandwidth", 0, "gain", 0.0F, nullptr);
-      g_object_unref(G_OBJECT(last_band));
-    }
-
-    int last_band_frequency = 0;
-    for (int i = 0; i < kEqBandCount; ++i) {
-      const int index_in_eq = i + 1;
-      GstObject *band = GST_OBJECT(gst_child_proxy_get_child_by_index(GST_CHILD_PROXY(equalizer_), static_cast<guint>(index_in_eq)));
-      if (band) {
-        const float frequency = static_cast<float>(kEqBandFrequencies[i]);
-        const float bandwidth = frequency - static_cast<float>(last_band_frequency);
-        last_band_frequency = static_cast<int>(frequency);
-        g_object_set(G_OBJECT(band), "freq", frequency, "bandwidth", bandwidth, "gain", 0.0F, nullptr);
-        g_object_unref(G_OBJECT(band));
-      }
-
-    }  // for
-
+  // Always create equalizer elements so they can be toggled during playback.
+  // When disabled, UpdateEqualizer() sets unity gain on all bands.
+  equalizer_preamp_ = CreateElement(u"volume"_s, u"equalizer_preamp"_s, audiobin_, error);
+  if (!equalizer_preamp_) {
+    return false;
   }
+  equalizer_ = CreateElement(u"equalizer-nbands"_s, u"equalizer_nbands"_s, audiobin_, error);
+  if (!equalizer_) {
+    return false;
+  }
+  // Setting the equalizer bands:
+  //
+  // GStreamer's GstIirEqualizerNBands sets up shelve filters for the first and last bands as corner cases.
+  // That was causing the "inverted slider" bug.
+  // As a workaround, we create two dummy bands at both ends of the spectrum.
+  // This causes the actual first and last adjustable bands to be implemented using band-pass filters.
+
+  g_object_set(G_OBJECT(equalizer_), "num-bands", kEqBandCount + 2, nullptr);
+
+  // Dummy first band (bandwidth 0, cutting below 20Hz):
+  GstObject *first_band = GST_OBJECT(gst_child_proxy_get_child_by_index(GST_CHILD_PROXY(equalizer_), 0));
+  if (first_band) {
+    g_object_set(G_OBJECT(first_band), "freq", 20.0, "bandwidth", 0, "gain", 0.0F, nullptr);
+    g_object_unref(G_OBJECT(first_band));
+  }
+
+  // Dummy last band (bandwidth 0, cutting over 20KHz):
+  GstObject *last_band = GST_OBJECT(gst_child_proxy_get_child_by_index(GST_CHILD_PROXY(equalizer_), kEqBandCount + 1));
+  if (last_band) {
+    g_object_set(G_OBJECT(last_band), "freq", 20000.0, "bandwidth", 0, "gain", 0.0F, nullptr);
+    g_object_unref(G_OBJECT(last_band));
+  }
+
+  int last_band_frequency = 0;
+  for (int i = 0; i < kEqBandCount; ++i) {
+    const int index_in_eq = i + 1;
+    GstObject *band = GST_OBJECT(gst_child_proxy_get_child_by_index(GST_CHILD_PROXY(equalizer_), static_cast<guint>(index_in_eq)));
+    if (band) {
+      const float frequency = static_cast<float>(kEqBandFrequencies[i]);
+      const float bandwidth = frequency - static_cast<float>(last_band_frequency);
+      last_band_frequency = static_cast<int>(frequency);
+      g_object_set(G_OBJECT(band), "freq", frequency, "bandwidth", bandwidth, "gain", 0.0F, nullptr);
+      g_object_unref(G_OBJECT(band));
+    }
+
+  }  // for
 
   eventprobe_ = audioqueueconverter;
   bufferprobe_ = audioqueueconverter;
@@ -932,8 +930,8 @@ bool GstEnginePipeline::InitAudioBin(QString &error) {
     element_link = volume_ebur128_;
   }
 
-  // Link equalizer elements if enabled.
-  if (eq_enabled_ && equalizer_ && equalizer_preamp_) {
+  // Link equalizer elements (bypassed via zero gain when disabled).
+  if (equalizer_ && equalizer_preamp_) {
     if (!gst_element_link_many(element_link, equalizer_preamp_, equalizer_, nullptr)) {
       error = "Failed to link equalizer and equalizer preamp elements."_L1;
       return false;

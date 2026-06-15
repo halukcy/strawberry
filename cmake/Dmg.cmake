@@ -24,6 +24,9 @@ if(MACDEPLOYQT_EXECUTABLE)
   if(APPLE_DEVELOPER_ID)
     set(MACDEPLOYQT_CODESIGN -codesign=${APPLE_DEVELOPER_ID})
     set(CREATEDMG_CODESIGN --codesign ${APPLE_DEVELOPER_ID})
+    set(MACRESIGN_IDENTITY ${APPLE_DEVELOPER_ID})
+  else()
+    set(MACRESIGN_IDENTITY -)
   endif()
   if(CREATEDMG_SKIP_JENKINS)
     set(CREATEDMG_SKIP_JENKINS_ARG "--skip-jenkins")
@@ -35,6 +38,7 @@ if(MACDEPLOYQT_EXECUTABLE)
     COMMAND cp -v ${CMAKE_SOURCE_DIR}/dist/macos/strawberry.icns ${CMAKE_BINARY_DIR}/strawberry.app/Contents/Resources/
     COMMAND ${CMAKE_SOURCE_DIR}/dist/macos/macgstcopy.sh ${CMAKE_BINARY_DIR}/strawberry.app
     COMMAND ${MACDEPLOYQT_EXECUTABLE} strawberry.app -verbose=3 -executable=${CMAKE_BINARY_DIR}/strawberry.app/Contents/PlugIns/gst-plugin-scanner ${MACDEPLOYQT_CODESIGN}
+    COMMAND ${CMAKE_SOURCE_DIR}/dist/macos/macresign.sh ${CMAKE_BINARY_DIR}/strawberry.app ${MACRESIGN_IDENTITY}
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     DEPENDS strawberry
   )
