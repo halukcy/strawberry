@@ -81,7 +81,7 @@ Equalizer::Equalizer(QWidget *parent)
 
   QObject::connect(ui_->enable_equalizer, &QCheckBox::toggled, this, &Equalizer::EqualizerEnabledChangedSlot);
 
-  QObject::connect(ui_->preset, QOverload<int>::of(&QComboBox::currentIndexChanged), this, QOverload<int>::of(&Equalizer::PresetChanged));
+  QObject::connect(ui_->preset, QOverload<int>::of(&QComboBox::activated), this, QOverload<int>::of(&Equalizer::PresetChanged));
   QObject::connect(ui_->preset_save, &QToolButton::clicked, this, &Equalizer::SavePreset);
   QObject::connect(ui_->preset_del, &QToolButton::clicked, this, &Equalizer::DelPreset);
 
@@ -187,12 +187,26 @@ void Equalizer::PresetChanged(const int index) {
 
 void Equalizer::PresetChanged(const QString &name) {
 
+  if (!presets_.contains(name)) return;
+
+  // Re-selecting the current preset reloads its saved values (discard edits).
+  if (name == last_preset_) {
+    ApplyPreset(name);
+    return;
+  }
+
   if (presets_.contains(last_preset_)) {
     if (presets_[last_preset_] != current_params()) {
       SaveCurrentPreset();
     }
   }
   last_preset_ = name;
+
+  ApplyPreset(name);
+
+}
+
+void Equalizer::ApplyPreset(const QString &name) {
 
   const Params p = presets_.value(name);
 
@@ -355,19 +369,6 @@ void Equalizer::Save() {
 
   s.setValue("enable_stereo_balancer", ui_->enable_stereo_balancer->isChecked());
   s.setValue("stereo_balance", ui_->stereo_balance_slider->value());
-
-}
-
-void Equalizer::closeEvent(QCloseEvent *e) {
-
-  Q_UNUSED(e)
-
-  QString name = ui_->preset->itemData(ui_->preset->currentIndex()).toString();
-  if (!presets_.contains(name)) return;
-
-  if (presets_[name] == current_params()) return;
-
-  SavePreset();
 
 }
 
