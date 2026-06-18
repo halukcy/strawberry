@@ -68,6 +68,8 @@ class BackendSettingsPage : public SettingsPage {
  private:
   void Load_Output(QString output, QVariant device);
   void Load_Device(const QString &output, const QVariant &device);
+  void SaveOutputDevice();
+  void GetOutputDeviceFromUI(QString &output_name, QVariant &device_value) const;
 #ifdef HAVE_ALSA
   void SwitchALSADevices(const ALSAPluginType alsa_plugin_type);
 #endif

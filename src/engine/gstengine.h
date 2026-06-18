@@ -137,6 +137,7 @@ class GstEngine : public EngineBase, public GstBufferConsumer {
   GstEnginePipelinePtr CreatePipeline(const QUrl &media_url, const QUrl &stream_url, const QByteArray &gst_url, const qint64 beginning_offset_nanosec, const qint64 end_offset_nanosec, const double ebur128_loudness_normalizing_gain_db);
 
   void FinishPipeline(GstEnginePipelinePtr pipeline);
+  void ResetPipelineForOutputChange();
 
   void UpdateScope(int chunk_length);
 

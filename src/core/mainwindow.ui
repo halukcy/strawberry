@@ -270,6 +270,29 @@
                  </spacer>
                 </item>
                 <item>
+                 <widget class="Line" name="line_output_device">
+                  <property name="orientation">
+                   <enum>Qt::Vertical</enum>
+                  </property>
+                 </widget>
+                </item>
+                <item>
+                 <widget class="QComboBox" name="output_device">
+                  <property name="sizePolicy">
+                   <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+                    <horstretch>0</horstretch>
+                    <verstretch>0</verstretch>
+                   </sizepolicy>
+                  </property>
+                  <property name="minimumContentsLength">
+                   <number>20</number>
+                  </property>
+                  <property name="sizeAdjustPolicy">
+                   <enum>QComboBox::AdjustToMinimumContentsLengthWithIcon</enum>
+                  </property>
+                 </widget>
+                </item>
+                <item>
                  <widget class="Line" name="line_volume">
                   <property name="orientation">
                    <enum>Qt::Vertical</enum>

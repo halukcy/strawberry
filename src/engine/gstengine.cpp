@@ -531,6 +531,9 @@ void GstEngine::ReloadSettings() {
   const QString old_spotify_access_token = spotify_access_token_;
 #endif
 
+  const QString old_output = output_;
+  const QVariant old_device = device_;
+
   EngineBase::ReloadSettings();
 
   if (output_.isEmpty()) output_ = QLatin1String(kAutoSink);
@@ -540,6 +543,10 @@ void GstEngine::ReloadSettings() {
     current_pipeline_->set_spotify_access_token(spotify_access_token_);
   }
 #endif
+
+  if (current_pipeline_ && (old_output != output_ || old_device != device_)) {
+    ResetPipelineForOutputChange();
+  }
 
 }
 
@@ -989,6 +996,21 @@ void GstEngine::FinishPipeline(GstEnginePipelinePtr pipeline) {
     QObject::connect(&*pipeline, &GstEnginePipeline::Finished, this, [this, pipeline_id]() {
       PipelineFinished(pipeline_id);
     });
+  }
+
+}
+
+void GstEngine::ResetPipelineForOutputChange() {
+
+  GstEnginePipelinePtr old_pipeline = current_pipeline_;
+  current_pipeline_ = GstEnginePipelinePtr();
+
+  if (old_pipeline) {
+    FinishPipeline(old_pipeline);
+  }
+
+  if (!stream_url_.isEmpty()) {
+    Q_EMIT StateChanged(State::Idle);
   }
 
 }

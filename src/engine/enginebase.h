@@ -123,6 +123,8 @@ class EngineBase : public QObject {
   bool Play(const QUrl &media_url, const QUrl &stream_url, const bool pause, const TrackChangeFlags flags, const bool force_stop_at_end, const quint64 beginning_offset_nanosec, const qint64 end_offset_nanosec, const quint64 offset_nanosec, const std::optional<double> ebur128_integrated_loudness_lufs);
   void SetVolume(const uint volume);
 
+  void SetOutputDevice(const QString &output, const QVariant &device);
+
  public Q_SLOTS:
   virtual void ReloadSettings();
   void UpdateVolume(const uint volume);

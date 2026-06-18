@@ -68,7 +68,7 @@
 #include <QStackedWidget>
 #include <QTabBar>
 #include <QToolButton>
-#include <QCheckBox>
+#include <QComboBox>
 #include <QClipboard>
 #include <QShowEvent>
 #include <QCloseEvent>
@@ -89,6 +89,7 @@
 #include "constants/filefilterconstants.h"
 #include "constants/timeconstants.h"
 #include "constants/mainwindowsettings.h"
+#include "constants/backendsettings.h"
 #include "includes/shared_ptr.h"
 #include "core/commandlineoptions.h"
 #include "core/mimedata.h"
@@ -107,6 +108,10 @@
 #include "utilities/filemanagerutils.h"
 #include "utilities/screenutils.h"
 #include "engine/enginebase.h"
+#include "engine/devicefinders.h"
+#include "engine/devicefinder.h"
+#include "engine/enginedevice.h"
+#include "engine/gstengine.h"
 #include "dialogs/errordialog.h"
 #include "dialogs/about.h"
 #include "dialogs/console.h"
@@ -418,7 +423,8 @@ MainWindow::MainWindow(Application *app,
       exit_(false),
       exit_count_(0),
       playlists_loaded_(false),
-      delete_files_(false) {
+      delete_files_(false),
+      loading_output_device_combo_(false) {
 
   qLog(Debug) << "Starting";
 
@@ -663,6 +669,8 @@ MainWindow::MainWindow(Application *app,
 
   // Player connections
   QObject::connect(ui_->volume, &VolumeSlider::valueChanged, &*app_->player(), &Player::SetVolumeFromSlider);
+  QObject::connect(ui_->output_device, QOverload<int>::of(&QComboBox::activated), this, &MainWindow::OutputDeviceActivated);
+  LoadOutputDeviceCombo();
 
   QObject::connect(&*app_->player(), &Player::Error, this, &MainWindow::ShowErrorDialog);
   QObject::connect(&*app_->player(), &Player::SongChangeRequestProcessed, &*app_->playlist_manager(), &PlaylistManager::SongChangeRequestProcessed);
@@ -1197,6 +1205,130 @@ MainWindow::~MainWindow() {
   delete ui_;
 }
 
+QString MainWindow::OutputForDeviceList() const {
+
+  Settings s;
+  s.beginGroup(BackendSettings::kSettingsGroup);
+  QString output = s.value(BackendSettings::kOutput).toString();
+  s.endGroup();
+
+  if (output.isEmpty()) {
+    output = app_->player()->engine()->DefaultOutput();
+  }
+
+  const QList<DeviceFinder*> device_finders = app_->device_finders()->ListFinders();
+  for (DeviceFinder *f : device_finders) {
+    if (f->outputs().contains(output)) return output;
+  }
+
+#ifdef Q_OS_MACOS
+  if (output == QLatin1String(GstEngine::kAutoSink)) return u"osxaudiosink"_s;
+#endif
+#ifdef HAVE_PULSE
+  if (output == QLatin1String(GstEngine::kAutoSink)) return u"pulsesink"_s;
+#endif
+
+  for (DeviceFinder *f : device_finders) {
+    if (!f->outputs().isEmpty()) return f->outputs().first();
+  }
+
+  return QString();
+
+}
+
+void MainWindow::LoadOutputDeviceCombo() {
+
+  loading_output_device_combo_ = true;
+
+  const QString list_output = OutputForDeviceList();
+
+  Settings s;
+  s.beginGroup(BackendSettings::kSettingsGroup);
+  const QVariant current_device = s.value(BackendSettings::kDevice);
+  s.endGroup();
+
+  ui_->output_device->clear();
+
+  if (list_output.isEmpty()) {
+    ui_->output_device->hide();
+    ui_->line_output_device->hide();
+    loading_output_device_combo_ = false;
+    return;
+  }
+
+  int device_count = 0;
+#ifndef Q_OS_WIN32
+  ui_->output_device->addItem(IconLoader::Load(u"soundcard"_s), tr("Default"), QVariant());
+  device_count++;
+#endif
+
+  const QList<DeviceFinder*> device_finders = app_->device_finders()->ListFinders();
+  for (DeviceFinder *f : device_finders) {
+    if (!f->outputs().contains(list_output)) continue;
+    const EngineDeviceList engine_devices = f->ListDevices();
+    for (const EngineDevice &d : engine_devices) {
+      ui_->output_device->addItem(IconLoader::Load(d.iconname), d.description, d.value);
+      device_count++;
+    }
+  }
+
+  if (device_count <= 1) {
+    ui_->output_device->hide();
+    ui_->line_output_device->hide();
+    loading_output_device_combo_ = false;
+    return;
+  }
+
+  ui_->output_device->show();
+  ui_->line_output_device->show();
+
+  int selected_index = 0;
+  for (int i = 0; i < ui_->output_device->count(); ++i) {
+    if (ui_->output_device->itemData(i) == current_device) {
+      selected_index = i;
+      break;
+    }
+  }
+  ui_->output_device->setCurrentIndex(selected_index);
+
+  loading_output_device_combo_ = false;
+
+}
+
+void MainWindow::OutputDeviceActivated(const int index) {
+
+  if (loading_output_device_combo_) return;
+
+  const QString list_output = OutputForDeviceList();
+  if (list_output.isEmpty()) return;
+
+  const QVariant device = ui_->output_device->itemData(index);
+
+  Settings s;
+  s.beginGroup(BackendSettings::kSettingsGroup);
+  QString output = s.value(BackendSettings::kOutput).toString();
+  s.endGroup();
+
+  if (output.isEmpty()) {
+    output = app_->player()->engine()->DefaultOutput();
+  }
+
+  const QList<DeviceFinder*> device_finders = app_->device_finders()->ListFinders();
+  bool output_has_devices = false;
+  for (DeviceFinder *f : device_finders) {
+    if (f->outputs().contains(output)) {
+      output_has_devices = true;
+      break;
+    }
+  }
+  if (!output_has_devices || output == QLatin1String(GstEngine::kAutoSink)) {
+    output = list_output;
+  }
+
+  app_->player()->engine()->SetOutputDevice(output, device);
+
+}
+
 void MainWindow::ReloadSettings() {
 
   Settings s;
@@ -1324,6 +1456,8 @@ void MainWindow::ReloadSettings() {
 #endif
 
   ui_->tabs->ReloadSettings();
+
+  LoadOutputDeviceCombo();
 
 }
 

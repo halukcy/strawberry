@@ -242,6 +242,26 @@ void EngineBase::ReloadSettings() {
 
 }
 
+void EngineBase::SetOutputDevice(const QString &output, const QVariant &device) {
+
+  Settings s;
+  s.beginGroup(BackendSettings::kSettingsGroup);
+
+  if (s.contains(BackendSettings::kOutputU)) {
+    s.remove(BackendSettings::kOutputU);
+  }
+  if (s.contains(BackendSettings::kDeviceU)) {
+    s.remove(BackendSettings::kDeviceU);
+  }
+
+  s.setValue(BackendSettings::kOutput, output);
+  s.setValue(BackendSettings::kDevice, device);
+  s.endGroup();
+
+  ReloadSettings();
+
+}
+
 void EngineBase::EmitAboutToFinish() {
 
   if (about_to_end_emitted_) {

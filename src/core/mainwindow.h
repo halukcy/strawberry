@@ -222,6 +222,9 @@ class MainWindow : public QMainWindow, public PlatformInterface {
   void RefreshStyleSheet();
   void SetHiddenInTray() { SetHiddenInTray(true); }
 
+  void LoadOutputDeviceCombo();
+  void OutputDeviceActivated(int index);
+
   void AddFile();
   void AddFolder();
   void AddCDTracks();
@@ -430,6 +433,10 @@ class MainWindow : public QMainWindow, public PlatformInterface {
     QPersistentModelIndex persistent_index;
   };
   QList<MetadataQueueEntry> metadata_queue_;
+
+  bool loading_output_device_combo_;
+
+  QString OutputForDeviceList() const;
 };
 
 #endif  // MAINWINDOW_H

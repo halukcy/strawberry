@@ -388,22 +388,59 @@ void BackendSettingsPage::Load_Device(const QString &output, const QVariant &dev
 
 }
 
-void BackendSettingsPage::Save() {
-
-  QString output_name;
-  QVariant device_value;
+void BackendSettingsPage::GetOutputDeviceFromUI(QString &output_name, QVariant &device_value) const {
 
   if (ui_->combobox_output->currentText().isEmpty()) {
     output_name = player_->engine()->DefaultOutput();
   }
   else {
-    EngineBase::OutputDetails output = ui_->combobox_output->itemData(ui_->combobox_output->currentIndex()).value<EngineBase::OutputDetails>();
+    const EngineBase::OutputDetails output = ui_->combobox_output->itemData(ui_->combobox_output->currentIndex()).value<EngineBase::OutputDetails>();
     output_name = output.name;
   }
 
-  if (ui_->combobox_device->currentText().isEmpty()) device_value = QVariant();
-  else if (ui_->combobox_device->currentText() == QLatin1String(kOutputCustom)) device_value = ui_->lineedit_device->text();
-  else device_value = ui_->combobox_device->itemData(ui_->combobox_device->currentIndex()).value<QVariant>();
+  if (ui_->combobox_device->currentText().isEmpty()) {
+    device_value = QVariant();
+  }
+  else if (ui_->combobox_device->currentText() == QLatin1String(kOutputCustom)) {
+    device_value = ui_->lineedit_device->text();
+  }
+  else {
+    device_value = ui_->combobox_device->itemData(ui_->combobox_device->currentIndex()).value<QVariant>();
+  }
+
+}
+
+void BackendSettingsPage::SaveOutputDevice() {
+
+  if (!configloaded_) return;
+
+  QString output_name;
+  QVariant device_value;
+  GetOutputDeviceFromUI(output_name, device_value);
+
+  Settings s;
+  s.beginGroup(kSettingsGroup);
+
+  if (s.contains(kOutputU)) {
+    s.remove(kOutputU);
+  }
+  if (s.contains(kDeviceU)) {
+    s.remove(kDeviceU);
+  }
+
+  s.setValue(kOutput, output_name);
+  s.setValue(kDevice, device_value);
+  s.endGroup();
+
+  player_->ReloadSettings();
+
+}
+
+void BackendSettingsPage::Save() {
+
+  QString output_name;
+  QVariant device_value;
+  GetOutputDeviceFromUI(output_name, device_value);
 
   Settings s;
   s.beginGroup(kSettingsGroup);
@@ -486,6 +523,8 @@ void BackendSettingsPage::OutputChanged(const int index) {
 
   Load_Device(output.name, QVariant());
 
+  SaveOutputDevice();
+
 }
 
 void BackendSettingsPage::DeviceSelectionChanged(int index) {
@@ -509,6 +548,8 @@ void BackendSettingsPage::DeviceSelectionChanged(int index) {
   }
 
   FadingOptionsChanged();
+
+  SaveOutputDevice();
 
 }
 
