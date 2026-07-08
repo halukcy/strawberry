@@ -1,3 +1,4 @@
+/.deps
 /build*
 /bin
 /CMakeLists.txt.user

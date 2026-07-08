@@ -61,6 +61,15 @@ fi
 CMAKE_PREFIX_PATH="$BREW_PREFIX"
 if [[ -n "$ICU_PREFIX" ]]; then
   CMAKE_PREFIX_PATH="${ICU_PREFIX}:${CMAKE_PREFIX_PATH}"
+  # ICU is keg-only: ensure pkg-config can locate uc/i18n .pc files.
+  export PKG_CONFIG_PATH="${ICU_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH}"
+fi
+
+# Strawberry requires KDSingleApplication. Prefer the repo-local prefix
+# (built during development) so we don't depend on a system-wide Homebrew install.
+KDSA_PREFIX="${SCRIPT_DIR}/.deps/kdsingleapplication"
+if [[ -d "${KDSA_PREFIX}/lib/cmake/KDSingleApplication-qt6" ]]; then
+  CMAKE_PREFIX_PATH="${KDSA_PREFIX}:${CMAKE_PREFIX_PATH}"
 fi
 
 CMAKE_FLAGS=(
@@ -77,6 +86,14 @@ CMAKE_FLAGS=(
   -DENABLE_QTSPARKLE=OFF
 )
 
+if [[ -n "$ICU_PREFIX" ]]; then
+  CMAKE_FLAGS+=(-DICU_ROOT="$ICU_PREFIX")
+fi
+
+if [[ -d "${KDSA_PREFIX}/lib/cmake/KDSingleApplication-qt6" ]]; then
+  CMAKE_FLAGS+=(-DKDSingleApplication-qt6_DIR="${KDSA_PREFIX}/lib/cmake/KDSingleApplication-qt6")
+fi
+
 configure() {
   echo "==> Configuring ${BUILD_DIR}"
   cmake -S . -B "$BUILD_DIR" "${CMAKE_FLAGS[@]}"
@@ -86,7 +103,19 @@ build() {
   local jobs
   jobs="$(sysctl -n hw.ncpu 2>/dev/null || echo 4)"
 
-  if [[ ! -f "${BUILD_DIR}/CMakeCache.txt" ]]; then
+  # If a previous configure tried to resolve ICU headers from the Apple SDK,
+  # the build can fail (missing unicode/translit.h, etc.).
+  # Detect and clean that state so we re-configure with Homebrew ICU.
+  if [[ -f "${BUILD_DIR}/CMakeCache.txt" ]] && \
+     (grep -q '^ICU_INCLUDE_DIR:PATH=.*/Library/Developer/' "${BUILD_DIR}/CMakeCache.txt" 2>/dev/null || true); then
+    echo "==> Cleaning ${BUILD_DIR} (ICU headers resolved to Apple SDK)"
+    rm -rf "${BUILD_DIR}"
+  fi
+
+  # If CMake didn't finish generating the build system, CMakeCache.txt can exist
+  # but the actual generator files (Makefile / build.ninja) are missing.
+  # In that case, we must re-configure.
+  if [[ ! -f "${BUILD_DIR}/CMakeCache.txt" || ( ! -f "${BUILD_DIR}/Makefile" && ! -f "${BUILD_DIR}/build.ninja" ) ]]; then
     configure
   fi
 
